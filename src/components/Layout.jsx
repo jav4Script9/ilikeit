@@ -4,16 +4,10 @@ import { useAuth } from '../lib/AuthContext'
 const navItemStyle = (isActive) => ({
   flex: 1,
   display: 'flex',
-  flexDirection: 'column',
   alignItems: 'center',
   justifyContent: 'center',
-  padding: '12px 0 10px',
-  gap: 4,
+  padding: '14px 0',
   color: isActive ? 'var(--accent)' : 'var(--text3)',
-  fontSize: 10,
-  fontWeight: 700,
-  letterSpacing: '0.03em',
-  textTransform: 'uppercase',
   transition: 'color 0.15s',
   textDecoration: 'none',
 })
@@ -56,16 +50,16 @@ export default function Layout() {
       </main>
       <nav style={{ display: 'flex', borderTop: '1px solid var(--border)', background: 'var(--bg2)', paddingBottom: 'env(safe-area-inset-bottom, 0px)', position: 'sticky', bottom: 0, zIndex: 100 }}>
         <NavLink to="/" end style={({ isActive }) => navItemStyle(isActive)}>
-          <IconFeed/><span>Лента</span>
+          <IconFeed/>
         </NavLink>
         <NavLink to="/map" style={({ isActive }) => navItemStyle(isActive)}>
-          <IconMap/><span>Карта</span>
+          <IconMap/>
         </NavLink>
         <NavLink to="/add" style={({ isActive }) => navItemStyle(isActive)}>
-          <IconAdd/><span>Добавить</span>
+          <IconAdd/>
         </NavLink>
         <NavLink to={user ? '/profile' : '/auth'} style={({ isActive }) => navItemStyle(isActive)}>
-          <IconProfile/><span>Профиль</span>
+          <IconProfile/>
         </NavLink>
       </nav>
     </div>

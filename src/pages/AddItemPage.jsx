@@ -453,7 +453,7 @@ export default function AddItemPage() {
         </div>
 
         {/* Адрес с геопоиском */}
-        {((!placeId && placeName.trim()) || category === 'shop') && (
+        {!placeId && (
           <div style={{ marginBottom: 16 }}>
             <label style={labelStyle}>Адрес</label>
             <div style={{ position: 'relative' }}>
