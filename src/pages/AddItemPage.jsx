@@ -317,47 +317,6 @@ export default function AddItemPage() {
   const inputStyle = { width: '100%', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 12, padding: '14px', color: 'var(--text)', fontSize: 15, fontFamily: 'Nunito, sans-serif' }
   const labelStyle = { display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }
 
-  const PlaceFields = () => (
-    <>
-      <div style={{ marginBottom: 16 }}>
-        <label style={labelStyle}>Страна</label>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {COUNTRIES.map(c => (
-            <button key={c.value} onClick={() => setCountry(c.value)} style={{ flex: 1, padding: '10px 4px', borderRadius: 12, fontSize: 11, fontWeight: 700, fontFamily: 'Nunito,sans-serif', background: country === c.value ? 'var(--bg2)' : 'var(--bg3)', color: country === c.value ? 'var(--accent)' : 'var(--text2)', border: country === c.value ? '1px solid var(--accent)' : '1px solid var(--border)', transition: 'all .2s', cursor: 'pointer' }}>
-              {c.label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div style={{ marginBottom: 16, position: 'relative' }}>
-        <label style={labelStyle}>{category === 'restaurant' ? 'Ресторан / Кафе' : 'Магазин'}</label>
-        <input style={inputStyle} placeholder="Название" value={placeName}
-          onChange={e => { setPlaceName(e.target.value); setPlaceId(null); searchPlaces(e.target.value) }}
-          onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-        />
-        {showSuggestions && placeSuggestions.length > 0 && (
-          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, zIndex: 10, overflow: 'hidden', marginTop: 4 }}>
-            {placeSuggestions.map(p => (
-              <div key={p.id} onMouseDown={() => handlePlaceSelect(p)} style={{ padding: '12px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: 14 }}>
-                <div style={{ fontWeight: 700 }}>{p.name}</div>
-                {p.address && <div style={{ fontSize: 12, color: 'var(--text3)' }}>{p.address}</div>}
-              </div>
-            ))}
-            <div onMouseDown={() => setShowSuggestions(false)} style={{ padding: '12px 14px', cursor: 'pointer', color: 'var(--accent)', fontSize: 13, fontWeight: 700 }}>+ Добавить новое</div>
-          </div>
-        )}
-      </div>
-      {(!placeId && placeName.trim()) || category === 'shop' ? (
-        <div style={{ marginBottom: 16 }}>
-          <label style={labelStyle}>Адрес</label>
-          <input style={inputStyle} placeholder="Улица, номер дома" value={placeAddress} onChange={e => setPlaceAddress(e.target.value)} />
-        </div>
-      ) : placeId && placeAddress ? (
-        <div style={{ marginBottom: 16, padding: '10px 14px', background: 'var(--bg3)', borderRadius: 12, fontSize: 13, color: 'var(--text2)' }}>📍 {placeAddress}</div>
-      ) : null}
-    </>
-  )
-
   return (
     <>
       {editTarget && <ImageEditor src={editTarget.src} onDone={handleEditDone} onCancel={() => setEditTarget(null)} />}
@@ -410,7 +369,48 @@ export default function AddItemPage() {
           </div>
         </div>
 
-        <PlaceFields />
+        {/* Страна */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelStyle}>Страна</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {COUNTRIES.map(c => (
+              <button key={c.value} onClick={() => setCountry(c.value)} style={{ flex: 1, padding: '10px 4px', borderRadius: 12, fontSize: 11, fontWeight: 700, fontFamily: 'Nunito,sans-serif', background: country === c.value ? 'var(--bg2)' : 'var(--bg3)', color: country === c.value ? 'var(--accent)' : 'var(--text2)', border: country === c.value ? '1px solid var(--accent)' : '1px solid var(--border)', transition: 'all .2s', cursor: 'pointer' }}>
+                {c.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Заведение */}
+        <div style={{ marginBottom: 16, position: 'relative' }}>
+          <label style={labelStyle}>{category === 'restaurant' ? 'Ресторан / Кафе' : 'Магазин'}</label>
+          <input style={inputStyle} placeholder="Название" value={placeName}
+            onChange={e => { setPlaceName(e.target.value); setPlaceId(null); searchPlaces(e.target.value) }}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+          />
+          {showSuggestions && placeSuggestions.length > 0 && (
+            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, zIndex: 10, overflow: 'hidden', marginTop: 4 }}>
+              {placeSuggestions.map(p => (
+                <div key={p.id} onMouseDown={() => handlePlaceSelect(p)} style={{ padding: '12px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: 14 }}>
+                  <div style={{ fontWeight: 700 }}>{p.name}</div>
+                  {p.address && <div style={{ fontSize: 12, color: 'var(--text3)' }}>{p.address}</div>}
+                </div>
+              ))}
+              <div onMouseDown={() => setShowSuggestions(false)} style={{ padding: '12px 14px', cursor: 'pointer', color: 'var(--accent)', fontSize: 13, fontWeight: 700 }}>+ Добавить новое</div>
+            </div>
+          )}
+        </div>
+
+        {/* Адрес */}
+        {((!placeId && placeName.trim()) || category === 'shop') && (
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelStyle}>Адрес</label>
+            <input style={inputStyle} placeholder="Улица, номер дома" value={placeAddress} onChange={e => setPlaceAddress(e.target.value)} />
+          </div>
+        )}
+        {placeId && placeAddress && (
+          <div style={{ marginBottom: 16, padding: '10px 14px', background: 'var(--bg3)', borderRadius: 12, fontSize: 13, color: 'var(--text2)' }}>📍 {placeAddress}</div>
+        )}
 
         <div style={{ marginBottom: 16 }}>
           <label style={labelStyle}>{category === 'restaurant' ? 'Название блюда *' : 'Название товара *'}</label>
