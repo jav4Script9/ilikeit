@@ -220,6 +220,57 @@ export default function AddItemPage() {
   const [placeName, setPlaceName] = useState('')
   const [placeId, setPlaceId] = useState(null)
   const [placeAddress, setPlaceAddress] = useState('')
+  const [placeLat, setPlaceLat] = useState(null)
+  const [placeLng, setPlaceLng] = useState(null)
+  const [geoSuggestions, setGeoSuggestions] = useState([])
+  const [geoLoading, setGeoLoading] = useState(false)
+  const mapPreviewRef = useRef(null)
+  const miniMap = useRef(null)
+
+  const searchGeo = async (q) => {
+    if (q.length < 3) { setGeoSuggestions([]); return }
+    setGeoLoading(true)
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&addressdetails=1`, {
+        headers: { 'Accept-Language': 'ru' }
+      })
+      const data = await res.json()
+      setGeoSuggestions(data)
+    } catch {}
+    setGeoLoading(false)
+  }
+
+  const selectGeo = (item) => {
+    setPlaceAddress(item.display_name.split(',').slice(0,3).join(','))
+    setPlaceLat(parseFloat(item.lat))
+    setPlaceLng(parseFloat(item.lon))
+    setGeoSuggestions([])
+    // Показать мини-карту
+    setTimeout(() => initMiniMap(parseFloat(item.lat), parseFloat(item.lon)), 100)
+  }
+
+  const initMiniMap = (lat, lng) => {
+    if (!window.L || !mapPreviewRef.current) return
+    const L = window.L
+    if (miniMap.current) { miniMap.current.remove(); miniMap.current = null }
+    const m = L.map(mapPreviewRef.current, { zoomControl: false, dragging: false, scrollWheelZoom: false }).setView([lat, lng], 15)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(m)
+    L.marker([lat, lng]).addTo(m)
+    miniMap.current = m
+  }
+
+  useEffect(() => {
+    if (!document.getElementById('leaflet-css')) {
+      const link = document.createElement('link')
+      link.id = 'leaflet-css'
+      link.rel = 'stylesheet'
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
+      document.head.appendChild(link)
+      const script = document.createElement('script')
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+      document.head.appendChild(script)
+    }
+  }, [])
   const [placeSuggestions, setPlaceSuggestions] = useState([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [itemName, setItemName] = useState('')
@@ -285,7 +336,7 @@ export default function AddItemPage() {
       if (placeName.trim() && !placeId) {
         const { data: np, error: pe } = await supabase.from('places').insert({
           name: placeName.trim(), category, country,
-          address: placeAddress.trim() || null, user_id: user.id,
+          address: placeAddress.trim() || null, lat: placeLat, lng: placeLng, user_id: user.id,
         }).select().single()
         if (pe) throw pe
         finalPlaceId = np.id
@@ -401,11 +452,33 @@ export default function AddItemPage() {
           )}
         </div>
 
-        {/* Адрес */}
+        {/* Адрес с геопоиском */}
         {((!placeId && placeName.trim()) || category === 'shop') && (
           <div style={{ marginBottom: 16 }}>
             <label style={labelStyle}>Адрес</label>
-            <input style={inputStyle} placeholder="Улица, номер дома" value={placeAddress} onChange={e => setPlaceAddress(e.target.value)} />
+            <div style={{ position: 'relative' }}>
+              <input
+                style={inputStyle}
+                placeholder="Начни вводить адрес..."
+                value={placeAddress}
+                onChange={e => { setPlaceAddress(e.target.value); searchGeo(e.target.value) }}
+                onBlur={() => setTimeout(() => setGeoSuggestions([]), 200)}
+              />
+              {geoLoading && <div style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)', fontSize: 12 }}>...</div>}
+              {geoSuggestions.length > 0 && (
+                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, zIndex: 20, overflow: 'hidden', marginTop: 4, maxHeight: 200, overflowY: 'auto' }}>
+                  {geoSuggestions.map((g, i) => (
+                    <div key={i} onMouseDown={() => selectGeo(g)} style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
+                      {g.display_name.split(',').slice(0, 3).join(', ')}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* Мини карта */}
+            {placeLat && (
+              <div ref={mapPreviewRef} style={{ width: '100%', height: 140, borderRadius: 12, overflow: 'hidden', marginTop: 10, border: '1px solid var(--border)' }} />
+            )}
           </div>
         )}
         {placeId && placeAddress && (

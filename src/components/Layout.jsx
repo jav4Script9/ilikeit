@@ -1,29 +1,5 @@
 import { Outlet, NavLink } from 'react-router-dom'
 import { useAuth } from '../lib/AuthContext'
-import { useTheme } from '../lib/useTheme'
-
-const styles = {
-  root: {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100dvh',
-    background: 'var(--bg)',
-  },
-  main: {
-    flex: 1,
-    overflowY: 'auto',
-    overflowX: 'hidden',
-  },
-  nav: {
-    display: 'flex',
-    borderTop: '1px solid var(--border)',
-    background: 'var(--bg2)',
-    paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-    position: 'sticky',
-    bottom: 0,
-    zIndex: 100,
-  },
-}
 
 const navItemStyle = (isActive) => ({
   flex: 1,
@@ -42,18 +18,21 @@ const navItemStyle = (isActive) => ({
   textDecoration: 'none',
 })
 
-// Минималистичная тарелка SVG
-const IconFeed = ({ active }) => (
+const IconFeed = () => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 11C3 7.13 7.03 4 12 4s9 3.13 9 7"/>
-    <path d="M3 11h18"/>
-    <path d="M12 11v9"/>
-    <path d="M8 20h8"/>
-    <path d="M17 6.5C17 6.5 19 8 19 11"/>
+    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+    <polyline points="9 22 9 12 15 12 15 22"/>
   </svg>
 )
 
-// Плюс добавить
+const IconMap = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
+    <line x1="8" y1="2" x2="8" y2="18"/>
+    <line x1="16" y1="6" x2="16" y2="22"/>
+  </svg>
+)
+
 const IconAdd = () => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
     <circle cx="12" cy="12" r="9"/>
@@ -61,7 +40,6 @@ const IconAdd = () => (
   </svg>
 )
 
-// Профиль
 const IconProfile = () => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="8" r="4"/>
@@ -71,24 +49,23 @@ const IconProfile = () => (
 
 export default function Layout() {
   const { user } = useAuth()
-
   return (
-    <div style={styles.root}>
-      <main style={styles.main}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--bg)' }}>
+      <main style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
         <Outlet />
       </main>
-      <nav style={styles.nav}>
-        <NavLink to="/" style={({ isActive }) => navItemStyle(isActive)}>
-          <IconFeed/>
-          <span>Лента</span>
+      <nav style={{ display: 'flex', borderTop: '1px solid var(--border)', background: 'var(--bg2)', paddingBottom: 'env(safe-area-inset-bottom, 0px)', position: 'sticky', bottom: 0, zIndex: 100 }}>
+        <NavLink to="/" end style={({ isActive }) => navItemStyle(isActive)}>
+          <IconFeed/><span>Лента</span>
+        </NavLink>
+        <NavLink to="/map" style={({ isActive }) => navItemStyle(isActive)}>
+          <IconMap/><span>Карта</span>
         </NavLink>
         <NavLink to="/add" style={({ isActive }) => navItemStyle(isActive)}>
-          <IconAdd/>
-          <span>Добавить</span>
+          <IconAdd/><span>Добавить</span>
         </NavLink>
         <NavLink to={user ? '/profile' : '/auth'} style={({ isActive }) => navItemStyle(isActive)}>
-          <IconProfile/>
-          <span>Профиль</span>
+          <IconProfile/><span>Профиль</span>
         </NavLink>
       </nav>
     </div>
