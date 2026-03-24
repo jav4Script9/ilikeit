@@ -260,6 +260,12 @@ export default function AddItemPage() {
   }
 
   useEffect(() => {
+    supabase.from('subcategories').select('*').eq('category', category).order('name')
+      .then(({ data }) => setSubcategories(data || []))
+    setSubcategory('')
+  }, [category])
+
+  useEffect(() => {
     if (!document.getElementById('leaflet-css')) {
       const link = document.createElement('link')
       link.id = 'leaflet-css'
@@ -274,6 +280,10 @@ export default function AddItemPage() {
   const [placeSuggestions, setPlaceSuggestions] = useState([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [itemName, setItemName] = useState('')
+  const [subcategory, setSubcategory] = useState('')
+  const [subcategories, setSubcategories] = useState([])
+  const [newSubcat, setNewSubcat] = useState('')
+  const [showNewSubcat, setShowNewSubcat] = useState(false)
   const [description, setDescription] = useState('')
   const [comment, setComment] = useState('')
   const [rating, setRating] = useState('')
@@ -343,6 +353,7 @@ export default function AddItemPage() {
       }
       const { data: newItem, error: ie } = await supabase.from('items').insert({
         name: itemName.trim(),
+        subcategory: subcategory || null,
         description: description.trim() || null,
         comment: comment.trim() || null,
         category, country,
@@ -488,6 +499,38 @@ export default function AddItemPage() {
         <div style={{ marginBottom: 16 }}>
           <label style={labelStyle}>{category === 'restaurant' ? 'Название блюда *' : 'Название товара *'}</label>
           <input style={inputStyle} placeholder={category === 'restaurant' ? 'Пицца Маргарита' : 'Milka Oreo'} value={itemName} onChange={e => setItemName(e.target.value)} />
+        </div>
+
+        {/* Подкатегория */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={labelStyle}>Категория блюда / товара</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+            {subcategories.map(s => (
+              <button key={s.id} onClick={() => setSubcategory(subcategory === s.name ? '' : s.name)}
+                style={{ padding: '7px 14px', borderRadius: 20, fontSize: 13, fontWeight: 700, fontFamily: 'Nunito,sans-serif', background: subcategory === s.name ? 'linear-gradient(135deg, var(--accent), var(--accent2))' : 'var(--bg3)', color: subcategory === s.name ? '#fff' : 'var(--text2)', border: subcategory === s.name ? 'none' : '1px solid var(--border)', cursor: 'pointer', transition: 'all .15s' }}>
+                {s.name}
+              </button>
+            ))}
+            <button onClick={() => setShowNewSubcat(!showNewSubcat)}
+              style={{ padding: '7px 14px', borderRadius: 20, fontSize: 13, fontWeight: 700, fontFamily: 'Nunito,sans-serif', background: 'var(--bg3)', color: 'var(--accent)', border: '1px dashed var(--accent)', cursor: 'pointer' }}>
+              + Добавить
+            </button>
+          </div>
+          {showNewSubcat && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input style={{ ...inputStyle, flex: 1 }} placeholder="Новая категория" value={newSubcat} onChange={e => setNewSubcat(e.target.value)} />
+              <button
+                onClick={async () => {
+                  if (!newSubcat.trim()) return
+                  const { data } = await supabase.from('subcategories').insert({ name: newSubcat.trim(), category }).select().single()
+                  if (data) { setSubcategories(prev => [...prev, data]); setSubcategory(data.name) }
+                  setNewSubcat(''); setShowNewSubcat(false)
+                }}
+                style={{ padding: '0 16px', borderRadius: 12, background: 'var(--accent)', color: '#fff', fontSize: 13, fontWeight: 700, fontFamily: 'Nunito,sans-serif', border: 'none', cursor: 'pointer' }}>
+                OK
+              </button>
+            </div>
+          )}
         </div>
 
         <div style={{ marginBottom: 16 }}>

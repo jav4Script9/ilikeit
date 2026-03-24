@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 const EMOJI = { restaurant: '🍽️', shop: '🛒' }
@@ -7,6 +7,7 @@ const RATING_COLOR = { love: '#1DB954', ok: '#FFB347', bad: '#e05555' }
 
 export default function MapPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const mapRef = useRef(null)
   const leafletMap = useRef(null)
   const markersRef = useRef([])
@@ -14,10 +15,30 @@ export default function MapPage() {
   const [selected, setSelected] = useState(null)
   const [filter, setFilter] = useState('all')
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [suggestions, setSuggestions] = useState([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
 
   useEffect(() => {
     fetchPlaces()
   }, [])
+
+  // Открываем место если пришли из ленты
+  useEffect(() => {
+    const placeId = searchParams.get('place')
+    if (placeId && places.length > 0) {
+      const found = places.find(p => p.id === placeId)
+      if (found) setSelected(found)
+    }
+  }, [searchParams, places])
+
+  async function handleSearch(q) {
+    setSearch(q)
+    if (q.length < 2) { setSuggestions([]); setShowSuggestions(false); return }
+    const { data } = await supabase.from('places').select('id, name, category').ilike('name', `%${q}%`).limit(6)
+    setSuggestions(data || [])
+    setShowSuggestions(true)
+  }
 
   useEffect(() => {
     if (!places.length) return
@@ -104,6 +125,34 @@ export default function MapPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Поиск */}
+      <div style={{ padding: '10px 16px 0', background: 'var(--bg)', flexShrink: 0, position: 'relative' }}>
+        <div style={{ display: 'flex', alignItems: 'center', background: 'var(--bg3)', borderRadius: 12, padding: '0 12px', border: '1px solid var(--border)', marginBottom: 10 }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ opacity: 0.4, flexShrink: 0 }}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input
+            placeholder="Найти заведение..."
+            value={search}
+            onChange={e => handleSearch(e.target.value)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+            style={{ flex: 1, background: 'none', border: 'none', color: 'var(--text)', fontSize: 14, padding: '10px 8px', fontFamily: 'Nunito, sans-serif' }}
+          />
+          {search && <button onClick={() => { setSearch(''); setSuggestions([]) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>}
+        </div>
+        {showSuggestions && suggestions.length > 0 && (
+          <div style={{ position: 'absolute', left: 16, right: 16, top: '100%', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, zIndex: 100, overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.2)' }}>
+            {suggestions.map(p => (
+              <div key={p.id} onMouseDown={() => { const found = places.find(x => x.id === p.id); if (found) setSelected(found); setSearch(p.name); setShowSuggestions(false) }}
+                style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: 13, display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span>{EMOJI[p.category]}</span>
+                <span style={{ fontWeight: 700 }}>{p.name}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Фильтры */}
       <div style={{ padding: '12px 16px', background: 'var(--bg)', borderBottom: '1px solid var(--border)', display: 'flex', gap: 8, flexShrink: 0 }}>
         {[['all','✨ Все'],['restaurant','🍽️ Рестораны'],['shop','🛒 Магазины']].map(([k,l]) => (
