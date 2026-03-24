@@ -18,195 +18,166 @@ const RATINGS = [
 function ImageEditor({ src, onDone, onCancel }) {
   const containerRef = useRef()
   const imgRef = useRef()
-  const [mode, setMode] = useState('crop') // crop | zoom
   const [imgLoaded, setImgLoaded] = useState(false)
-
-  // Crop state
+  const [imgRect, setImgRect] = useState({ x: 0, y: 0, w: 0, h: 0 })
   const [crop, setCrop] = useState({ x: 0, y: 0, w: 0, h: 0 })
-  const [dragging, setDragging] = useState(null)
-
-  // Zoom/pan state
-  const [scale, setScale] = useState(1)
-  const [offset, setOffset] = useState({ x: 0, y: 0 })
-  const [panning, setPanning] = useState(null)
-  const lastTouchDist = useRef(null)
+  const dragRef = useRef(null) // { type: 'move'|'nw'|'ne'|'sw'|'se', sx, sy, sc }
 
   const handleImgLoad = () => {
     const img = imgRef.current
-    setCrop({ x: 0, y: 0, w: img.offsetWidth, h: img.offsetHeight })
+    const cont = containerRef.current
+    const contRect = cont.getBoundingClientRect()
+    const scale = Math.min(contRect.width / img.naturalWidth, contRect.height / img.naturalHeight)
+    const w = img.naturalWidth * scale
+    const h = img.naturalHeight * scale
+    const x = (contRect.width - w) / 2
+    const y = (contRect.height - h) / 2
+    setImgRect({ x, y, w, h })
+    setCrop({ x: 0, y: 0, w, h })
     setImgLoaded(true)
   }
 
-  const getPos = (e) => {
-    const rect = (mode === 'crop' ? imgRef.current : containerRef.current).getBoundingClientRect()
+  const getContPos = (e) => {
+    const rect = containerRef.current.getBoundingClientRect()
     const touch = e.touches?.[0] || e
     return { x: touch.clientX - rect.left, y: touch.clientY - rect.top }
   }
 
-  // --- CROP ---
-  const onCropDown = (e) => {
+  const startDrag = (type, e) => {
     e.stopPropagation()
-    const pos = getPos(e)
-    setDragging({ sx: pos.x, sy: pos.y, sc: { ...crop } })
-  }
-  const onCropMove = useCallback((e) => {
-    if (!dragging) return
-    const pos = getPos(e)
-    const img = imgRef.current
-    const dx = pos.x - dragging.sx
-    const dy = pos.y - dragging.sy
-    setCrop(prev => ({
-      ...prev,
-      x: Math.max(0, Math.min(img.offsetWidth - prev.w, dragging.sc.x + dx)),
-      y: Math.max(0, Math.min(img.offsetHeight - prev.h, dragging.sc.y + dy)),
-    }))
-  }, [dragging])
-  const onCropUp = () => setDragging(null)
-
-  const setAspect = (ratio) => {
-    const img = imgRef.current
-    const w = img.offsetWidth
-    const h = ratio ? w / ratio : img.offsetHeight
-    setCrop({ x: 0, y: 0, w, h: Math.min(h, img.offsetHeight) })
-  }
-
-  // --- ZOOM/PAN ---
-  const onPanDown = (e) => {
-    const pos = getPos(e)
-    setPanning({ sx: pos.x, sy: pos.y, so: { ...offset } })
-  }
-  const onPanMove = useCallback((e) => {
-    // Pinch zoom
-    if (e.touches?.length === 2) {
-      const d = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      )
-      if (lastTouchDist.current) {
-        const delta = d / lastTouchDist.current
-        setScale(s => Math.max(0.5, Math.min(4, s * delta)))
-      }
-      lastTouchDist.current = d
-      return
-    }
-    if (!panning) return
-    const pos = getPos(e)
-    setOffset({
-      x: panning.so.x + (pos.x - panning.sx),
-      y: panning.so.y + (pos.y - panning.sy),
-    })
-  }, [panning])
-  const onPanUp = () => { setPanning(null); lastTouchDist.current = null }
-
-  const onWheel = (e) => {
     e.preventDefault()
-    setScale(s => Math.max(0.5, Math.min(4, s - e.deltaY * 0.001)))
+    const pos = getContPos(e)
+    dragRef.current = { type, sx: pos.x, sy: pos.y, sc: { ...crop } }
   }
 
-  // --- APPLY ---
+  const onMove = useCallback((e) => {
+    const d = dragRef.current
+    if (!d) return
+    const pos = getContPos(e)
+    const dx = pos.x - d.sx
+    const dy = pos.y - d.sy
+    const MIN = 40
+    const { x: ix, y: iy, w: iw, h: ih } = imgRect
+    const sc = d.sc
+
+    setCrop(prev => {
+      let { x, y, w, h } = sc
+      if (d.type === 'move') {
+        x = Math.max(0, Math.min(iw - w, sc.x + dx))
+        y = Math.max(0, Math.min(ih - h, sc.y + dy))
+      } else if (d.type === 'nw') {
+        const nx = Math.min(sc.x + dx, sc.x + sc.w - MIN)
+        const ny = Math.min(sc.y + dy, sc.y + sc.h - MIN)
+        w = sc.w - (nx - sc.x); h = sc.h - (ny - sc.y); x = nx; y = ny
+      } else if (d.type === 'ne') {
+        w = Math.max(MIN, sc.w + dx); h = sc.h - (Math.min(sc.y + dy, sc.y + sc.h - MIN) - sc.y)
+        y = Math.min(sc.y + dy, sc.y + sc.h - MIN)
+      } else if (d.type === 'sw') {
+        const nx = Math.min(sc.x + dx, sc.x + sc.w - MIN)
+        w = sc.w - (nx - sc.x); h = Math.max(MIN, sc.h + dy); x = nx
+      } else if (d.type === 'se') {
+        w = Math.max(MIN, sc.w + dx); h = Math.max(MIN, sc.h + dy)
+      }
+      // Клампим в границы изображения
+      x = Math.max(0, Math.min(iw - MIN, x))
+      y = Math.max(0, Math.min(ih - MIN, y))
+      w = Math.min(iw - x, Math.max(MIN, w))
+      h = Math.min(ih - y, Math.max(MIN, h))
+      return { x, y, w, h }
+    })
+  }, [imgRect])
+
+  const onUp = () => { dragRef.current = null }
+
   const apply = () => {
     const img = imgRef.current
+    const sx = img.naturalWidth / imgRect.w
+    const sy = img.naturalHeight / imgRect.h
     const canvas = document.createElement('canvas')
-    if (mode === 'crop') {
-      const sx = img.naturalWidth / img.offsetWidth
-      const sy = img.naturalHeight / img.offsetHeight
-      canvas.width = crop.w * sx
-      canvas.height = crop.h * sy
-      canvas.getContext('2d').drawImage(img, crop.x * sx, crop.y * sy, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height)
-    } else {
-      // Zoom mode — экспортируем текущий вид
-      const rect = containerRef.current.getBoundingClientRect()
-      canvas.width = rect.width
-      canvas.height = rect.height
-      const ctx = canvas.getContext('2d')
-      const cx = rect.width / 2 + offset.x
-      const cy = rect.height / 2 + offset.y
-      const dw = img.naturalWidth * scale * (rect.width / img.offsetWidth)
-      const dh = img.naturalHeight * scale * (rect.height / img.offsetHeight)
-      ctx.drawImage(img, cx - dw / 2, cy - dh / 2, dw, dh)
-    }
+    canvas.width = Math.round(crop.w * sx)
+    canvas.height = Math.round(crop.h * sy)
+    canvas.getContext('2d').drawImage(img, crop.x * sx, crop.y * sy, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height)
     canvas.toBlob(blob => onDone(blob), 'image/webp', 0.92)
   }
 
+  const handleStyle = (cursor) => ({
+    position: 'absolute', width: 18, height: 18,
+    background: 'var(--accent)', borderRadius: 3,
+    border: '2px solid #fff', cursor,
+    transform: 'translate(-50%, -50%)',
+  })
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 1000, display: 'flex', flexDirection: 'column' }}>
-      {/* Header */}
-      <div style={{ padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.8)' }}>
+      <div style={{ padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.85)', flexShrink: 0 }}>
         <button onClick={onCancel} style={{ color: '#aaa', fontSize: 14, fontWeight: 700, fontFamily: 'Nunito,sans-serif', background: 'none', border: 'none', cursor: 'pointer' }}>Отмена</button>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {['crop', 'zoom'].map(m => (
-            <button key={m} onClick={() => setMode(m)} style={{ padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 700, fontFamily: 'Nunito,sans-serif', background: mode === m ? 'var(--accent)' : '#333', color: '#fff', border: 'none', cursor: 'pointer' }}>
-              {m === 'crop' ? '✂️ Обрезка' : '🔍 Зум'}
-            </button>
-          ))}
-        </div>
+        <span style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>Обрезать фото</span>
         <button onClick={apply} style={{ color: 'var(--accent)', fontSize: 14, fontWeight: 700, fontFamily: 'Nunito,sans-serif', background: 'none', border: 'none', cursor: 'pointer' }}>Готово</button>
       </div>
 
-      {/* Canvas area */}
-      <div ref={containerRef} style={{ flex: 1, overflow: 'hidden', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', userSelect: 'none' }}
-        onMouseMove={mode === 'crop' ? onCropMove : onPanMove}
-        onMouseUp={mode === 'crop' ? onCropUp : onPanUp}
-        onTouchMove={mode === 'crop' ? onCropMove : onPanMove}
-        onTouchEnd={mode === 'crop' ? onCropUp : onPanUp}
-        onMouseDown={mode === 'zoom' ? onPanDown : undefined}
-        onTouchStart={mode === 'zoom' ? onPanDown : undefined}
-        onWheel={mode === 'zoom' ? onWheel : undefined}
+      <div ref={containerRef}
+        style={{ flex: 1, position: 'relative', overflow: 'hidden', userSelect: 'none' }}
+        onMouseMove={onMove} onMouseUp={onUp}
+        onTouchMove={onMove} onTouchEnd={onUp}
       >
-        <img
-          ref={imgRef}
-          src={src}
-          onLoad={handleImgLoad}
-          style={{
-            maxWidth: '100vw', maxHeight: 'calc(100vh - 160px)', display: 'block',
-            transform: mode === 'zoom' ? `translate(${offset.x}px, ${offset.y}px) scale(${scale})` : 'none',
-            transformOrigin: 'center',
-            transition: panning || dragging ? 'none' : 'transform 0.1s',
-          }}
+        <img ref={imgRef} src={src} onLoad={handleImgLoad}
+          style={{ position: 'absolute', left: imgRect.x, top: imgRect.y, width: imgRect.w, height: imgRect.h, display: 'block', pointerEvents: 'none' }}
         />
-        {mode === 'crop' && imgLoaded && (
-          <div
-            onMouseDown={onCropDown}
-            onTouchStart={onCropDown}
-            style={{
-              position: 'absolute',
-              left: `calc(50% - ${imgRef.current?.offsetWidth / 2}px + ${crop.x}px)`,
-              top: `calc(50% - ${imgRef.current?.offsetHeight / 2}px + ${crop.y}px)`,
-              width: crop.w, height: crop.h,
-              border: '2px solid var(--accent)',
-              boxShadow: '0 0 0 9999px rgba(0,0,0,0.55)',
-              cursor: 'move', boxSizing: 'border-box',
-            }}
-          >
-            {/* Угловые маркеры */}
-            {[[0,0,'nw'],[0,100,'ne'],[100,0,'sw'],[100,100,'se']].map(([t,l,c]) => (
-              <div key={c} style={{ position: 'absolute', top: `${t}%`, left: `${l}%`, width: 12, height: 12, background: 'var(--accent)', borderRadius: 2, transform: 'translate(-50%,-50%)' }} />
-            ))}
-          </div>
+        {imgLoaded && (
+          <>
+            {/* Затемнение вокруг */}
+            <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+              <defs>
+                <mask id="crop-mask">
+                  <rect width="100%" height="100%" fill="white"/>
+                  <rect x={imgRect.x + crop.x} y={imgRect.y + crop.y} width={crop.w} height={crop.h} fill="black"/>
+                </mask>
+              </defs>
+              <rect width="100%" height="100%" fill="rgba(0,0,0,0.6)" mask="url(#crop-mask)"/>
+            </svg>
+
+            {/* Рамка кропа */}
+            <div
+              onMouseDown={e => startDrag('move', e)}
+              onTouchStart={e => startDrag('move', e)}
+              style={{
+                position: 'absolute',
+                left: imgRect.x + crop.x, top: imgRect.y + crop.y,
+                width: crop.w, height: crop.h,
+                border: '2px solid var(--accent)',
+                cursor: 'move', boxSizing: 'border-box',
+              }}
+            >
+              {/* Сетка thirds */}
+              {[1/3, 2/3].map(f => (
+                <div key={'v'+f} style={{ position: 'absolute', left: `${f*100}%`, top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.25)', pointerEvents: 'none' }} />
+              ))}
+              {[1/3, 2/3].map(f => (
+                <div key={'h'+f} style={{ position: 'absolute', top: `${f*100}%`, left: 0, right: 0, height: 1, background: 'rgba(255,255,255,0.25)', pointerEvents: 'none' }} />
+              ))}
+              {/* Угловые ручки */}
+              <div onMouseDown={e => startDrag('nw',e)} onTouchStart={e => startDrag('nw',e)} style={{ ...handleStyle('nw-resize'), left: 0, top: 0 }} />
+              <div onMouseDown={e => startDrag('ne',e)} onTouchStart={e => startDrag('ne',e)} style={{ ...handleStyle('ne-resize'), left: '100%', top: 0 }} />
+              <div onMouseDown={e => startDrag('sw',e)} onTouchStart={e => startDrag('sw',e)} style={{ ...handleStyle('sw-resize'), left: 0, top: '100%' }} />
+              <div onMouseDown={e => startDrag('se',e)} onTouchStart={e => startDrag('se',e)} style={{ ...handleStyle('se-resize'), left: '100%', top: '100%' }} />
+            </div>
+          </>
         )}
       </div>
 
-      {/* Crop controls */}
-      {mode === 'crop' && (
-        <div style={{ padding: '12px 16px', display: 'flex', gap: 8, background: 'rgba(0,0,0,0.8)' }}>
-          {[['1:1',1],['4:3',4/3],['16:9',16/9],['Всё',null]].map(([label, ratio]) => (
-            <button key={label} onClick={() => setAspect(ratio)}
-              style={{ flex: 1, padding: '10px 4px', background: '#222', border: '1px solid #444', borderRadius: 10, color: '#fff', fontSize: 11, fontWeight: 700, fontFamily: 'Nunito,sans-serif', cursor: 'pointer' }}>
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Zoom controls */}
-      {mode === 'zoom' && (
-        <div style={{ padding: '12px 16px', display: 'flex', gap: 8, alignItems: 'center', background: 'rgba(0,0,0,0.8)' }}>
-          <button onClick={() => setScale(s => Math.max(0.5, s - 0.2))} style={{ width: 40, height: 40, borderRadius: 10, background: '#222', border: '1px solid #444', color: '#fff', fontSize: 20, cursor: 'pointer' }}>−</button>
-          <div style={{ flex: 1, textAlign: 'center', color: '#aaa', fontSize: 13 }}>{Math.round(scale * 100)}%</div>
-          <button onClick={() => setScale(s => Math.min(4, s + 0.2))} style={{ width: 40, height: 40, borderRadius: 10, background: '#222', border: '1px solid #444', color: '#fff', fontSize: 20, cursor: 'pointer' }}>+</button>
-          <button onClick={() => { setScale(1); setOffset({ x: 0, y: 0 }) }} style={{ padding: '0 12px', height: 40, borderRadius: 10, background: '#222', border: '1px solid #444', color: '#aaa', fontSize: 11, fontWeight: 700, fontFamily: 'Nunito,sans-serif', cursor: 'pointer' }}>Сброс</button>
-        </div>
-      )}
+      <div style={{ padding: '12px 16px', display: 'flex', gap: 8, background: 'rgba(0,0,0,0.85)', flexShrink: 0 }}>
+        {[['1:1',1],['4:3',4/3],['16:9',16/9],['Свободно',null]].map(([label, ratio]) => (
+          <button key={label} onClick={() => {
+            if (!ratio) return // свободно — просто не меняем
+            const h = Math.min(crop.w / ratio, imgRect.h)
+            const w = h * ratio
+            setCrop(c => ({ ...c, w: Math.min(w, imgRect.w), h }))
+          }}
+            style={{ flex: 1, padding: '10px 4px', background: '#222', border: '1px solid #444', borderRadius: 10, color: '#fff', fontSize: 11, fontWeight: 700, fontFamily: 'Nunito,sans-serif', cursor: 'pointer' }}>
+            {label}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }

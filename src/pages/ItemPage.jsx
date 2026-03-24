@@ -65,21 +65,49 @@ export default function ItemPage() {
     setVoting(false)
   }
 
+  const [editPhotos, setEditPhotos] = useState([])
+  const [editPhotoIdx, setEditPhotoIdx] = useState(0)
+  const editFileRef = useRef()
+
+  const handleEditPhoto = (e) => {
+    const files = Array.from(e.target.files)
+    files.forEach(file => {
+      const reader = new FileReader()
+      reader.onload = ev => setEditPhotos(prev => [...prev, { preview: ev.target.result, blob: file }])
+      reader.readAsDataURL(file)
+    })
+  }
+
   async function saveEdit() {
     setSaving(true)
+
+    let photoUrls = item.photos || []
+    if (editPhotos.length > 0) {
+      const newUrls = []
+      for (let i = 0; i < editPhotos.length; i++) {
+        const p = editPhotos[i]
+        const path = `${user.id}/${Date.now()}_${i}.webp`
+        await supabase.storage.from('photos').upload(path, p.blob)
+        const { data } = supabase.storage.from('photos').getPublicUrl(path)
+        newUrls.push(data.publicUrl)
+      }
+      photoUrls = [...photoUrls, ...newUrls]
+    }
+
     await supabase.from('items').update({
       name: editData.name.trim(),
       description: editData.description.trim() || null,
       comment: editData.comment.trim() || null,
       rating: editData.rating || null,
+      photos: photoUrls,
+      photo_url: photoUrls[0] || null,
     }).eq('id', id)
 
-    // Обновляем оценку автора
     if (editData.rating) {
-      const typeMap = { love: 'love', ok: 'ok', bad: 'bad' }
       await supabase.from('ratings').upsert({ item_id: id, user_id: user.id, type: editData.rating }, { onConflict: 'user_id,item_id' })
     }
 
+    setEditPhotos([])
     await fetchItem()
     setSaving(false)
     setEditing(false)
@@ -104,8 +132,9 @@ export default function ItemPage() {
 
       {/* Кнопка редактировать */}
       {isOwner && !editing && (
-        <button onClick={() => setEditing(true)} style={{ position: 'absolute', top: 16, right: 16, zIndex: 20, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', borderRadius: 12, padding: '8px 14px', color: '#fff', fontSize: 14, fontWeight: 700, fontFamily: 'Nunito, sans-serif', border: 'none', cursor: 'pointer' }}>
-          ✏️ Изменить
+        <button onClick={() => setEditing(true)} style={{ position: 'absolute', top: 16, right: 16, zIndex: 20, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', borderRadius: 12, padding: '8px 12px', color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'Nunito,sans-serif' }}>Изменить</span>
         </button>
       )}
 
@@ -140,6 +169,27 @@ export default function ItemPage() {
         {editing ? (
           <div>
             <div style={{ fontWeight: 900, fontSize: 17, marginBottom: 20 }}>Редактировать запись</div>
+
+            {/* Фото в редактировании */}
+            <div style={{ marginBottom: 16 }}>
+              <label style={labelStyle}>Фото</label>
+              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
+                {[...photos, ...editPhotos.map(p => p.preview)].map((src, i) => (
+                  <div key={i} style={{ flexShrink: 0, width: 80, height: 80, borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)', position: 'relative' }}>
+                    <img src={src} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    {i >= photos.length && (
+                      <div style={{ position: 'absolute', top: 2, right: 2, width: 18, height: 18, background: 'var(--accent)', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ color: '#fff', fontSize: 10, fontWeight: 900 }}>+</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <label style={{ flexShrink: 0, width: 80, height: 80, borderRadius: 10, border: '2px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text3)' }}>
+                  <input ref={editFileRef} type="file" accept="image/*" multiple onChange={handleEditPhoto} style={{ display: 'none' }} />
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                </label>
+              </div>
+            </div>
 
             <div style={{ marginBottom: 14 }}>
               <label style={labelStyle}>Название</label>
