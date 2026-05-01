@@ -17,10 +17,10 @@ const RATINGS = [
 
 const compressToWebp = (file, maxDim = 1920, quality = 0.85) => new Promise((resolve, reject) => {
   const reader = new FileReader()
-  reader.onerror = reject
+  reader.onerror = () => reject(new Error('Не удалось прочитать файл'))
   reader.onload = (ev) => {
     const img = new Image()
-    img.onerror = reject
+    img.onerror = () => reject(new Error('Браузер не смог открыть это фото — возможно, формат не поддерживается'))
     img.onload = () => {
       const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight))
       const w = Math.round(img.naturalWidth * scale)
@@ -29,7 +29,10 @@ const compressToWebp = (file, maxDim = 1920, quality = 0.85) => new Promise((res
       canvas.width = w
       canvas.height = h
       canvas.getContext('2d').drawImage(img, 0, 0, w, h)
-      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('toBlob failed')), 'image/webp', quality)
+      canvas.toBlob(blob => {
+        if (blob) return resolve(blob)
+        canvas.toBlob(b2 => b2 ? resolve(b2) : reject(new Error('Кодирование изображения не удалось')), 'image/jpeg', quality)
+      }, 'image/webp', quality)
     }
     img.src = ev.target.result
   }
@@ -318,6 +321,12 @@ export default function AddItemPage() {
   const [error, setError] = useState('')
   const fileRef = useRef()
 
+  useEffect(() => {
+    if (!error) return
+    const t = setTimeout(() => setError(''), 5000)
+    return () => clearTimeout(t)
+  }, [error])
+
   const searchPlaces = async (q) => {
     if (q.length < 2) { setPlaceSuggestions([]); setShowSuggestions(false); return }
     const { data } = await supabase.from('places').select('*').eq('category', category).ilike('name', `%${q}%`).limit(5)
@@ -336,12 +345,24 @@ export default function AddItemPage() {
     const files = Array.from(e.target.files)
     e.target.value = ''
     for (const file of files) {
+      const lower = (file.name || '').toLowerCase()
+      const isHeic = file.type === 'image/heic' || file.type === 'image/heif' || lower.endsWith('.heic') || lower.endsWith('.heif')
+      const placeholder = { preview: null, blob: null, converting: isHeic }
+      setPhotos(prev => [...prev, placeholder])
       try {
-        const blob = await compressToWebp(file)
+        let working = file
+        if (isHeic) {
+          const heic2any = (await import('heic2any')).default
+          const out = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 })
+          const jpegBlob = Array.isArray(out) ? out[0] : out
+          working = new File([jpegBlob], file.name.replace(/\.hei[cf]$/i, '.jpg'), { type: 'image/jpeg' })
+        }
+        const blob = await compressToWebp(working)
         const url = URL.createObjectURL(blob)
-        setPhotos(prev => [...prev, { preview: url, blob }])
+        setPhotos(prev => prev.map(p => p === placeholder ? { preview: url, blob } : p))
       } catch (err) {
-        setError('Не удалось обработать фото: ' + err.message)
+        setError('Не удалось обработать фото: ' + (err?.message || 'неизвестная ошибка'))
+        setPhotos(prev => prev.filter(p => p !== placeholder))
       }
     }
   }
@@ -369,6 +390,7 @@ export default function AddItemPage() {
   const handleSubmit = async () => {
     if (!itemName.trim()) { setError('Введи название'); return }
     if (!rating) { setError('Выбери оценку'); return }
+    if (photos.some(p => p.converting)) { setError('Подожди, фото ещё конвертируется'); return }
     setLoading(true); setError('')
     try {
       const photoUrls = photos.length > 0 ? await uploadPhotos() : []
@@ -426,16 +448,25 @@ export default function AddItemPage() {
           {photos.length > 0 ? (
             <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4, marginBottom: 0 }}>
               {photos.map((p, i) => (
-                <div key={i} style={{ position: 'relative', flexShrink: 0, width: 110, height: 110, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border)' }}>
-                  <img src={p.preview} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  <div style={{ position: 'absolute', top: 4, right: 4, display: 'flex', gap: 4 }}>
-                    <button onClick={() => setEditTarget({ index: i, src: p.preview })} style={{ width: 26, height: 26, borderRadius: 6, background: 'rgba(0,0,0,0.75)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                    </button>
-                    <button onClick={() => setPhotos(prev => prev.filter((_, j) => j !== i))} style={{ width: 26, height: 26, borderRadius: 6, background: 'rgba(0,0,0,0.75)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                    </button>
-                  </div>
+                <div key={i} style={{ position: 'relative', flexShrink: 0, width: 110, height: 110, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border)', background: 'var(--bg3)' }}>
+                  {p.preview ? (
+                    <img src={p.preview} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, color: 'var(--text3)', fontSize: 11, textAlign: 'center', padding: 8 }}>
+                      <div style={{ width: 22, height: 22, border: '2px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                      <span>Конвертируем HEIC...</span>
+                    </div>
+                  )}
+                  {p.preview && (
+                    <div style={{ position: 'absolute', top: 4, right: 4, display: 'flex', gap: 4 }}>
+                      <button onClick={() => setEditTarget({ index: i, src: p.preview })} style={{ width: 26, height: 26, borderRadius: 6, background: 'rgba(0,0,0,0.75)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      </button>
+                      <button onClick={() => setPhotos(prev => prev.filter((_, j) => j !== i))} style={{ width: 26, height: 26, borderRadius: 6, background: 'rgba(0,0,0,0.75)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
               <label style={{ flexShrink: 0, width: 110, height: 110, borderRadius: 12, border: '2px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text3)' }}>
@@ -598,7 +629,17 @@ export default function AddItemPage() {
           </div>
         </div>
 
-        {error && <div style={{ background: '#e0555518', border: '1px solid #e0555533', borderRadius: 10, padding: '12px 14px', color: '#e05555', fontSize: 13, marginBottom: 16 }}>{error}</div>}
+        {error && (
+          <div onClick={() => setError('')} style={{
+            position: 'fixed', top: 'calc(env(safe-area-inset-top, 0px) + 16px)',
+            left: 16, right: 16, zIndex: 2000,
+            background: '#e05555', color: '#fff', padding: '14px 16px',
+            borderRadius: 12, fontSize: 14, fontWeight: 700,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.4)', cursor: 'pointer',
+            fontFamily: 'Nunito, sans-serif',
+            animation: 'toast-in .25s ease-out',
+          }}>{error}</div>
+        )}
 
         <button onClick={handleSubmit} disabled={loading} style={{ width: '100%', padding: '15px', borderRadius: 14, background: loading ? 'var(--bg3)' : 'linear-gradient(135deg, var(--accent), var(--accent2))', color: loading ? 'var(--text3)' : '#fff', fontSize: 15, fontWeight: 800, fontFamily: 'Nunito,sans-serif', border: 'none', cursor: loading ? 'default' : 'pointer' }}>
           {loading ? 'Публикуем...' : '✅ Опубликовать'}
