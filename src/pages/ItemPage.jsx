@@ -20,6 +20,16 @@ export default function ItemPage() {
   const [editData, setEditData] = useState({})
   const [saving, setSaving] = useState(false)
   const [photoIdx, setPhotoIdx] = useState(0)
+  const [showDelete, setShowDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  async function deleteItem() {
+    if (deleting) return
+    setDeleting(true)
+    await supabase.from('ratings').delete().eq('item_id', id)
+    await supabase.from('items').delete().eq('id', id)
+    navigate('/')
+  }
 
   useEffect(() => { fetchItem() }, [id])
 
@@ -224,6 +234,10 @@ export default function ItemPage() {
                 {saving ? 'Сохраняем...' : '✅ Сохранить'}
               </button>
             </div>
+
+            <button onClick={() => setShowDelete(true)} style={{ width: '100%', marginTop: 24, padding: '13px', borderRadius: 12, background: 'transparent', border: '1px solid #e0555555', color: '#e05555', fontSize: 13, fontWeight: 700, fontFamily: 'Nunito,sans-serif', cursor: 'pointer' }}>
+              Удалить запись
+            </button>
           </div>
 
         ) : (
@@ -306,6 +320,25 @@ export default function ItemPage() {
           </>
         )}
       </div>
+
+      {showDelete && (
+        <div onClick={() => !deleting && setShowDelete(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--bg2)', borderRadius: 18, padding: '22px 20px', width: '100%', maxWidth: 340, border: '1px solid var(--border)', boxShadow: '0 12px 40px rgba(0,0,0,0.5)' }}>
+            <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 8, textAlign: 'center' }}>Удалить запись?</div>
+            <div style={{ fontSize: 13, color: 'var(--text2)', textAlign: 'center', marginBottom: 18, lineHeight: 1.5 }}>
+              «{item.name}» и все её оценки будут удалены без возможности восстановления.
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setShowDelete(false)} disabled={deleting} style={{ flex: 1, padding: '12px', borderRadius: 12, background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', fontSize: 13, fontWeight: 700, fontFamily: 'Nunito,sans-serif', cursor: 'pointer' }}>
+                Отмена
+              </button>
+              <button onClick={deleteItem} disabled={deleting} style={{ flex: 1, padding: '12px', borderRadius: 12, background: '#e05555', border: 'none', color: '#fff', fontSize: 13, fontWeight: 800, fontFamily: 'Nunito,sans-serif', cursor: deleting ? 'wait' : 'pointer', opacity: deleting ? 0.7 : 1 }}>
+                {deleting ? 'Удаляем...' : 'Удалить'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
