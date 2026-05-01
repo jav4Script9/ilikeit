@@ -126,10 +126,11 @@ function ImageEditor({ src, onDone, onCancel }) {
     background: 'var(--accent)', borderRadius: 3,
     border: '2px solid #fff', cursor,
     transform: 'translate(-50%, -50%)',
+    touchAction: 'none',
   })
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 1000, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 1000, display: 'flex', flexDirection: 'column', touchAction: 'none', overscrollBehavior: 'contain' }}>
       <div style={{ padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.85)', flexShrink: 0 }}>
         <button onClick={onCancel} style={{ color: '#aaa', fontSize: 14, fontWeight: 700, fontFamily: 'Nunito,sans-serif', background: 'none', border: 'none', cursor: 'pointer' }}>Отмена</button>
         <span style={{ color: '#fff', fontSize: 14, fontWeight: 700 }}>Обрезать фото</span>
@@ -167,6 +168,7 @@ function ImageEditor({ src, onDone, onCancel }) {
                 width: crop.w, height: crop.h,
                 border: '2px solid var(--accent)',
                 cursor: 'move', boxSizing: 'border-box',
+                touchAction: 'none',
               }}
             >
               {/* Сетка thirds */}
