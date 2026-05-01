@@ -11,6 +11,7 @@ const FILTERS = [
 export default function HomePage() {
   const [items, setItems] = useState([])
   const [filter, setFilter] = useState('all')
+  const [placeFilter, setPlaceFilter] = useState('')
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [suggestions, setSuggestions] = useState([])
@@ -18,6 +19,7 @@ export default function HomePage() {
   const searchRef = useRef()
 
   useEffect(() => { fetchItems() }, [filter])
+  useEffect(() => { setPlaceFilter('') }, [filter])
 
   async function fetchItems() {
     setLoading(true)
@@ -48,13 +50,24 @@ export default function HomePage() {
     setShowSuggestions(true)
   }
 
-  const filtered = search.length >= 2
+  const placesInCategory = (() => {
+    if (filter === 'all') return []
+    const counts = {}
+    items.forEach(i => {
+      const p = i.place?.trim()
+      if (p) counts[p] = (counts[p] || 0) + 1
+    })
+    return Object.entries(counts).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+  })()
+
+  const filtered = (search.length >= 2
     ? items.filter(item =>
         item.name?.toLowerCase().includes(search.toLowerCase()) ||
         item.subcategory?.toLowerCase().includes(search.toLowerCase()) ||
         item.place?.toLowerCase().includes(search.toLowerCase())
       )
     : items
+  ).filter(item => !placeFilter || item.place === placeFilter)
 
   return (
     <div style={{ minHeight: '100%' }}>
@@ -111,6 +124,25 @@ export default function HomePage() {
             </button>
           ))}
         </div>
+
+        {filter !== 'all' && placesInCategory.length > 0 && (
+          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2, marginTop: 8 }}>
+            <button onClick={() => setPlaceFilter('')}
+              style={{ whiteSpace: 'nowrap', padding: '5px 11px', borderRadius: 16, fontSize: 12, fontWeight: 700, fontFamily: 'Nunito, sans-serif', background: !placeFilter ? 'var(--accent)' : 'var(--bg3)', color: !placeFilter ? '#fff' : 'var(--text2)', border: !placeFilter ? 'none' : '1px solid var(--border)', transition: 'all .15s', cursor: 'pointer' }}>
+              Все места
+            </button>
+            {placesInCategory.map(p => {
+              const active = placeFilter === p.name
+              return (
+                <button key={p.name} onClick={() => setPlaceFilter(active ? '' : p.name)}
+                  style={{ whiteSpace: 'nowrap', padding: '5px 11px', borderRadius: 16, fontSize: 12, fontWeight: 700, fontFamily: 'Nunito, sans-serif', background: active ? 'var(--accent)' : 'var(--bg3)', color: active ? '#fff' : 'var(--text2)', border: active ? 'none' : '1px solid var(--border)', transition: 'all .15s', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  📍 {p.name}
+                  <span style={{ fontSize: 10, opacity: 0.7 }}>{p.count}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       <div style={{ padding: '16px 16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
