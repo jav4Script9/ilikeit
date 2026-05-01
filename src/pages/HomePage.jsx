@@ -12,6 +12,8 @@ export default function HomePage() {
   const [items, setItems] = useState([])
   const [filter, setFilter] = useState('all')
   const [placeFilter, setPlaceFilter] = useState('')
+  const [showPlaceSheet, setShowPlaceSheet] = useState(false)
+  const [placeSearch, setPlaceSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [suggestions, setSuggestions] = useState([])
@@ -19,7 +21,7 @@ export default function HomePage() {
   const searchRef = useRef()
 
   useEffect(() => { fetchItems() }, [filter])
-  useEffect(() => { setPlaceFilter('') }, [filter])
+  useEffect(() => { setPlaceFilter(''); setShowPlaceSheet(false); setPlaceSearch('') }, [filter])
 
   async function fetchItems() {
     setLoading(true)
@@ -126,24 +128,86 @@ export default function HomePage() {
         </div>
 
         {filter !== 'all' && placesInCategory.length > 0 && (
-          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2, marginTop: 8 }}>
-            <button onClick={() => setPlaceFilter('')}
-              style={{ whiteSpace: 'nowrap', padding: '5px 11px', borderRadius: 16, fontSize: 12, fontWeight: 700, fontFamily: 'Nunito, sans-serif', background: !placeFilter ? 'var(--accent)' : 'var(--bg3)', color: !placeFilter ? '#fff' : 'var(--text2)', border: !placeFilter ? 'none' : '1px solid var(--border)', transition: 'all .15s', cursor: 'pointer' }}>
-              Все места
+          <div style={{ marginTop: 8, display: 'flex' }}>
+            <button onClick={() => setShowPlaceSheet(true)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 16, fontSize: 12, fontWeight: 700, fontFamily: 'Nunito, sans-serif', background: placeFilter ? 'var(--accent)' : 'var(--bg3)', color: placeFilter ? '#fff' : 'var(--text2)', border: placeFilter ? 'none' : '1px solid var(--border)', cursor: 'pointer', transition: 'all .15s', maxWidth: '100%' }}>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                📍 {placeFilter || 'Все места'}
+              </span>
+              {placeFilter ? (
+                <span onClick={e => { e.stopPropagation(); setPlaceFilter('') }}
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: '50%', background: 'rgba(255,255,255,0.25)', flexShrink: 0 }}>
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </span>
+              ) : (
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0, opacity: 0.7 }}><path d="M6 9l6 6 6-6"/></svg>
+              )}
             </button>
-            {placesInCategory.map(p => {
-              const active = placeFilter === p.name
-              return (
-                <button key={p.name} onClick={() => setPlaceFilter(active ? '' : p.name)}
-                  style={{ whiteSpace: 'nowrap', padding: '5px 11px', borderRadius: 16, fontSize: 12, fontWeight: 700, fontFamily: 'Nunito, sans-serif', background: active ? 'var(--accent)' : 'var(--bg3)', color: active ? '#fff' : 'var(--text2)', border: active ? 'none' : '1px solid var(--border)', transition: 'all .15s', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                  📍 {p.name}
-                  <span style={{ fontSize: 10, opacity: 0.7 }}>{p.count}</span>
-                </button>
-              )
-            })}
           </div>
         )}
       </div>
+
+      {showPlaceSheet && (() => {
+        const matches = placeSearch.trim()
+          ? placesInCategory.filter(p => p.name.toLowerCase().includes(placeSearch.toLowerCase()))
+          : placesInCategory
+        const closeSheet = () => { setShowPlaceSheet(false); setPlaceSearch('') }
+        return (
+          <div onClick={closeSheet} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1500, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+            <div onClick={e => e.stopPropagation()} style={{
+              background: 'var(--bg2)', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+              width: '100%', maxWidth: 600, maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+              borderTop: '1px solid var(--border)', borderLeft: '1px solid var(--border)', borderRight: '1px solid var(--border)',
+              animation: 'sheet-up .25s ease-out',
+              paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 10 }}>
+                <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--border)' }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 18px 6px' }}>
+                <span style={{ fontSize: 15, fontWeight: 800 }}>{filter === 'restaurant' ? 'Рестораны' : 'Магазины'}</span>
+                <button onClick={closeSheet} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', padding: 4 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+              </div>
+              <div style={{ padding: '0 18px 10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', background: 'var(--bg3)', borderRadius: 12, padding: '0 12px', border: '1px solid var(--border)' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ opacity: 0.4, flexShrink: 0 }}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                  <input
+                    type="search"
+                    placeholder="Поиск по названию"
+                    value={placeSearch}
+                    onChange={e => setPlaceSearch(e.target.value)}
+                    autoFocus
+                    style={{ flex: 1, background: 'none', border: 'none', color: 'var(--text)', fontSize: 14, padding: '10px 8px', fontFamily: 'Nunito, sans-serif', outline: 'none' }}
+                  />
+                </div>
+              </div>
+              <div style={{ overflowY: 'auto', padding: '0 8px 12px' }}>
+                <button onClick={() => { setPlaceFilter(''); closeSheet() }}
+                  style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderRadius: 10, background: !placeFilter ? 'var(--bg3)' : 'transparent', border: 'none', color: 'var(--text)', fontSize: 14, fontWeight: !placeFilter ? 800 : 600, fontFamily: 'Nunito, sans-serif', cursor: 'pointer' }}>
+                  <span>✨ Все места</span>
+                  <span style={{ fontSize: 11, color: 'var(--text3)' }}>{placesInCategory.reduce((a, p) => a + p.count, 0)}</span>
+                </button>
+                {matches.length === 0 ? (
+                  <div style={{ padding: '24px 14px', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>Ничего не найдено</div>
+                ) : matches.map(p => {
+                  const active = placeFilter === p.name
+                  return (
+                    <button key={p.name} onClick={() => { setPlaceFilter(p.name); closeSheet() }}
+                      style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', borderRadius: 10, background: active ? 'var(--bg3)' : 'transparent', border: 'none', color: active ? 'var(--accent)' : 'var(--text)', fontSize: 14, fontWeight: active ? 800 : 600, fontFamily: 'Nunito, sans-serif', cursor: 'pointer' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        📍 {p.name}
+                      </span>
+                      <span style={{ fontSize: 11, color: active ? 'var(--accent)' : 'var(--text3)', flexShrink: 0, marginLeft: 8 }}>{p.count}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       <div style={{ padding: '16px 16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {loading ? (
