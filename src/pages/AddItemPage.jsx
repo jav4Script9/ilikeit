@@ -266,8 +266,28 @@ export default function AddItemPage() {
   }
 
   useEffect(() => {
-    supabase.from('subcategories').select('*').eq('category', category).order('name')
-      .then(({ data }) => setSubcategories(data || []))
+    Promise.all([
+      supabase.from('subcategories').select('*').eq('category', category),
+      supabase.from('items').select('subcategory').eq('category', category).not('subcategory', 'is', null),
+    ]).then(([subRes, itemRes]) => {
+      const counts = {}
+      itemRes.data?.forEach(i => {
+        const k = (i.subcategory || '').trim()
+        if (k) counts[k.toLowerCase()] = (counts[k.toLowerCase()] || 0) + 1
+      })
+      const merged = [...(subRes.data || [])]
+      const known = new Set(merged.map(s => s.name.toLowerCase()))
+      Object.keys(counts).forEach(lk => {
+        if (!known.has(lk)) {
+          // surface a name only seen in items (legacy) — pick original casing from first hit
+          const orig = (itemRes.data || []).find(i => i.subcategory.toLowerCase() === lk)?.subcategory || lk
+          merged.push({ id: null, name: orig, category })
+        }
+      })
+      merged.forEach(s => { s.count = counts[s.name.toLowerCase()] || 0 })
+      merged.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+      setSubcategories(merged)
+    })
     setSubcategory('')
   }, [category])
 
@@ -288,8 +308,7 @@ export default function AddItemPage() {
   const [itemName, setItemName] = useState('')
   const [subcategory, setSubcategory] = useState('')
   const [subcategories, setSubcategories] = useState([])
-  const [newSubcat, setNewSubcat] = useState('')
-  const [showNewSubcat, setShowNewSubcat] = useState(false)
+  const [subcatFocused, setSubcatFocused] = useState(false)
   const [description, setDescription] = useState('')
   const [comment, setComment] = useState('')
   const [rating, setRating] = useState('')
@@ -353,6 +372,13 @@ export default function AddItemPage() {
     setLoading(true); setError('')
     try {
       const photoUrls = photos.length > 0 ? await uploadPhotos() : []
+      const cleanSubcat = subcategory.trim()
+      if (cleanSubcat) {
+        const known = subcategories.some(s => s.id != null && s.name.toLowerCase() === cleanSubcat.toLowerCase())
+        if (!known) {
+          await supabase.from('subcategories').insert({ name: cleanSubcat, category }).select().single()
+        }
+      }
       let finalPlaceId = placeId
       if (placeName.trim() && !placeId) {
         const { data: np, error: pe } = await supabase.from('places').insert({
@@ -364,7 +390,7 @@ export default function AddItemPage() {
       }
       const { data: newItem, error: ie } = await supabase.from('items').insert({
         name: itemName.trim(),
-        subcategory: subcategory || null,
+        subcategory: subcategory.trim() || null,
         description: description.trim() || null,
         comment: comment.trim() || null,
         category, country,
@@ -512,35 +538,41 @@ export default function AddItemPage() {
         </div>
 
         {/* Подкатегория */}
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 16, position: 'relative' }}>
           <label style={labelStyle}>Категория блюда / товара</label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
-            {subcategories.map(s => (
-              <button key={s.id} onClick={() => setSubcategory(subcategory === s.name ? '' : s.name)}
-                style={{ padding: '7px 14px', borderRadius: 20, fontSize: 13, fontWeight: 700, fontFamily: 'Nunito,sans-serif', background: subcategory === s.name ? 'linear-gradient(135deg, var(--accent), var(--accent2))' : 'var(--bg3)', color: subcategory === s.name ? '#fff' : 'var(--text2)', border: subcategory === s.name ? 'none' : '1px solid var(--border)', cursor: 'pointer', transition: 'all .15s' }}>
-                {s.name}
-              </button>
-            ))}
-            <button onClick={() => setShowNewSubcat(!showNewSubcat)}
-              style={{ padding: '7px 14px', borderRadius: 20, fontSize: 13, fontWeight: 700, fontFamily: 'Nunito,sans-serif', background: 'var(--bg3)', color: 'var(--accent)', border: '1px dashed var(--accent)', cursor: 'pointer' }}>
-              + Добавить
-            </button>
-          </div>
-          {showNewSubcat && (
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input style={{ ...inputStyle, flex: 1 }} placeholder="Новая категория" value={newSubcat} onChange={e => setNewSubcat(e.target.value)} />
-              <button
-                onClick={async () => {
-                  if (!newSubcat.trim()) return
-                  const { data } = await supabase.from('subcategories').insert({ name: newSubcat.trim(), category }).select().single()
-                  if (data) { setSubcategories(prev => [...prev, data]); setSubcategory(data.name) }
-                  setNewSubcat(''); setShowNewSubcat(false)
-                }}
-                style={{ padding: '0 16px', borderRadius: 12, background: 'var(--accent)', color: '#fff', fontSize: 13, fontWeight: 700, fontFamily: 'Nunito,sans-serif', border: 'none', cursor: 'pointer' }}>
-                OK
-              </button>
-            </div>
-          )}
+          <input
+            style={inputStyle}
+            placeholder={category === 'restaurant' ? 'Пицца, паста, бургер...' : 'Молочка, снеки, сыр...'}
+            value={subcategory}
+            onChange={e => setSubcategory(e.target.value)}
+            onFocus={() => setSubcatFocused(true)}
+            onBlur={() => setTimeout(() => setSubcatFocused(false), 150)}
+          />
+          {subcatFocused && (() => {
+            const q = subcategory.trim().toLowerCase()
+            const matches = (q
+              ? subcategories.filter(s => s.name.toLowerCase().includes(q))
+              : subcategories
+            ).slice(0, 5)
+            const exact = q && subcategories.some(s => s.name.toLowerCase() === q)
+            if (matches.length === 0 && !q) return null
+            return (
+              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, zIndex: 10, overflow: 'hidden', marginTop: 4 }}>
+                {matches.map(s => (
+                  <div key={s.id || s.name} onMouseDown={() => { setSubcategory(s.name); setSubcatFocused(false) }}
+                    style={{ padding: '12px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>{s.name}</span>
+                    {s.count > 0 && <span style={{ fontSize: 11, color: 'var(--text3)' }}>{s.count}</span>}
+                  </div>
+                ))}
+                {q && !exact && (
+                  <div onMouseDown={() => setSubcatFocused(false)} style={{ padding: '12px 14px', cursor: 'pointer', color: 'var(--accent)', fontSize: 13, fontWeight: 700 }}>
+                    + Добавить «{subcategory.trim()}»
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </div>
 
         <div style={{ marginBottom: 16 }}>
