@@ -6,7 +6,6 @@ import ItemPage from './pages/ItemPage'
 import AddItemPage from './pages/AddItemPage'
 import ProfilePage from './pages/ProfilePage'
 import AuthPage from './pages/AuthPage'
-import MapPage from './pages/MapPage'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -22,7 +21,6 @@ function AppRoutes() {
       <Route element={<Layout />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/item/:id" element={<ItemPage />} />
-        <Route path="/map" element={<MapPage />} />
         <Route path="/add" element={
           <ProtectedRoute><AddItemPage /></ProtectedRoute>
         } />

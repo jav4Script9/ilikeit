@@ -4,16 +4,37 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 
 const COUNTRIES = [
-  { value: 'cz', label: '🇨🇿 Чехия' },
-  { value: 'ua', label: '🇺🇦 Украина' },
-  { value: 'de', label: '🇩🇪 Германия' },
+  { value: 'cz', label: '🇨🇿' },
+  { value: 'ua', label: '🇺🇦' },
+  { value: 'de', label: '🇩🇪' },
 ]
 
 const RATINGS = [
-  { value: 'love', emoji: '😍', label: 'Нравится' },
-  { value: 'maybe', emoji: '😐', label: 'Не определился' },
   { value: 'dislike', emoji: '😞', label: 'Не нравится' },
+  { value: 'maybe', emoji: '😐', label: 'Не определился' },
+  { value: 'love', emoji: '😍', label: 'Нравится' },
 ]
+
+const compressToWebp = (file, maxDim = 1920, quality = 0.85) => new Promise((resolve, reject) => {
+  const reader = new FileReader()
+  reader.onerror = reject
+  reader.onload = (ev) => {
+    const img = new Image()
+    img.onerror = reject
+    img.onload = () => {
+      const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight))
+      const w = Math.round(img.naturalWidth * scale)
+      const h = Math.round(img.naturalHeight * scale)
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+      canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('toBlob failed')), 'image/webp', quality)
+    }
+    img.src = ev.target.result
+  }
+  reader.readAsDataURL(file)
+})
 
 function ImageEditor({ src, onDone, onCancel }) {
   const containerRef = useRef()
@@ -202,11 +223,23 @@ export default function AddItemPage() {
     if (q.length < 3) { setGeoSuggestions([]); return }
     setGeoLoading(true)
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&addressdetails=1`, {
-        headers: { 'Accept-Language': 'ru' }
+      const [dbRes, nomRes] = await Promise.all([
+        supabase.from('places').select('address, lat, lng').eq('category', category).not('address', 'is', null).ilike('address', `%${q}%`).limit(3),
+        fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&addressdetails=1`, {
+          headers: { 'Accept-Language': 'ru' }
+        }).then(r => r.json()).catch(() => []),
+      ])
+      const seen = new Set()
+      const combined = []
+      ;(dbRes.data || []).forEach(d => {
+        const key = d.address.toLowerCase().trim()
+        if (!seen.has(key)) { seen.add(key); combined.push({ display_name: d.address, lat: d.lat, lon: d.lng, fromDb: true }) }
       })
-      const data = await res.json()
-      setGeoSuggestions(data)
+      ;(nomRes || []).forEach(n => {
+        const key = n.display_name.split(',').slice(0,3).join(',').toLowerCase().trim()
+        if (!seen.has(key)) { seen.add(key); combined.push(n) }
+      })
+      setGeoSuggestions(combined)
     } catch {}
     setGeoLoading(false)
   }
@@ -278,13 +311,18 @@ export default function AddItemPage() {
     setShowSuggestions(false)
   }
 
-  const handlePhotoSelect = (e) => {
-    Array.from(e.target.files).forEach(file => {
-      const reader = new FileReader()
-      reader.onload = (ev) => setPhotos(prev => [...prev, { preview: ev.target.result, blob: file }])
-      reader.readAsDataURL(file)
-    })
+  const handlePhotoSelect = async (e) => {
+    const files = Array.from(e.target.files)
     e.target.value = ''
+    for (const file of files) {
+      try {
+        const blob = await compressToWebp(file)
+        const url = URL.createObjectURL(blob)
+        setPhotos(prev => [...prev, { preview: url, blob }])
+      } catch (err) {
+        setError('Не удалось обработать фото: ' + err.message)
+      }
+    }
   }
 
   const handleEditDone = (blob) => {
@@ -299,7 +337,7 @@ export default function AddItemPage() {
       const p = photos[i]
       const ext = 'webp'
       const path = `${user.id}/${Date.now()}_${i}.${ext}`
-      const { error } = await supabase.storage.from('photos').upload(path, p.blob)
+      const { error } = await supabase.storage.from('photos').upload(path, p.blob, { contentType: 'image/webp' })
       if (error) throw error
       const { data } = supabase.storage.from('photos').getPublicUrl(path)
       urls.push(data.publicUrl)
@@ -354,8 +392,6 @@ export default function AddItemPage() {
     <>
       {editTarget && <ImageEditor src={editTarget.src} onDone={handleEditDone} onCancel={() => setEditTarget(null)} />}
       <div style={{ padding: '20px 16px 40px' }}>
-        <div style={{ fontFamily: 'Unbounded, sans-serif', fontSize: 19, fontWeight: 900, marginBottom: 22 }}>Добавить запись</div>
-
         {/* Фото */}
         <div style={{ marginBottom: 20 }}>
           <label style={labelStyle}>Фото</label>
@@ -407,7 +443,7 @@ export default function AddItemPage() {
           <label style={labelStyle}>Страна</label>
           <div style={{ display: 'flex', gap: 8 }}>
             {COUNTRIES.map(c => (
-              <button key={c.value} onClick={() => setCountry(c.value)} style={{ flex: 1, padding: '10px 4px', borderRadius: 12, fontSize: 11, fontWeight: 700, fontFamily: 'Nunito,sans-serif', background: country === c.value ? 'var(--bg2)' : 'var(--bg3)', color: country === c.value ? 'var(--accent)' : 'var(--text2)', border: country === c.value ? '1px solid var(--accent)' : '1px solid var(--border)', transition: 'all .2s', cursor: 'pointer' }}>
+              <button key={c.value} onClick={() => setCountry(c.value)} style={{ flex: 1, padding: '12px 4px', borderRadius: 12, fontSize: 24, lineHeight: 1, background: country === c.value ? 'var(--bg2)' : 'var(--bg3)', border: country === c.value ? '2px solid var(--accent)' : '2px solid var(--border)', transition: 'all .2s', cursor: 'pointer', filter: country === c.value ? 'none' : 'grayscale(40%)', opacity: country === c.value ? 1 : 0.7 }}>
                 {c.label}
               </button>
             ))}
@@ -469,7 +505,7 @@ export default function AddItemPage() {
 
         <div style={{ marginBottom: 16 }}>
           <label style={labelStyle}>{category === 'restaurant' ? 'Название блюда *' : 'Название товара *'}</label>
-          <input style={inputStyle} placeholder={category === 'restaurant' ? 'Пицца Маргарита' : 'Milka Oreo'} value={itemName} onChange={e => setItemName(e.target.value)} />
+          <input style={inputStyle} placeholder={category === 'restaurant' ? 'Маргарита' : 'Milka Oreo'} value={itemName} onChange={e => setItemName(e.target.value)} />
         </div>
 
         {/* Подкатегория */}

@@ -19,14 +19,6 @@ const IconFeed = () => (
   </svg>
 )
 
-const IconMap = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
-    <line x1="8" y1="2" x2="8" y2="18"/>
-    <line x1="16" y1="6" x2="16" y2="22"/>
-  </svg>
-)
-
 const IconAdd = () => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
     <circle cx="12" cy="12" r="9"/>
@@ -51,9 +43,6 @@ export default function Layout() {
       <nav style={{ display: 'flex', borderTop: '1px solid var(--border)', background: 'var(--bg2)', paddingBottom: 'env(safe-area-inset-bottom, 0px)', position: 'sticky', bottom: 0, zIndex: 100 }}>
         <NavLink to="/" end style={({ isActive }) => navItemStyle(isActive)}>
           <IconFeed/>
-        </NavLink>
-        <NavLink to="/map" style={({ isActive }) => navItemStyle(isActive)}>
-          <IconMap/>
         </NavLink>
         <NavLink to="/add" style={({ isActive }) => navItemStyle(isActive)}>
           <IconAdd/>

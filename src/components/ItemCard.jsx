@@ -60,12 +60,8 @@ export default function ItemCard({ item }) {
           </div>
         )}
 
-        {/* Место — кликабельное */}
         {item.place && (
-          <div
-            onClick={e => { e.stopPropagation(); navigate(`/map?place=${item.place_id || ''}`) }}
-            style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 700, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}
-          >
+          <div style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 700, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
             {item.place}
           </div>
