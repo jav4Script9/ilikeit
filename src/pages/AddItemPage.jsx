@@ -4,9 +4,9 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 
 const COUNTRIES = [
-  { value: 'cz', label: '🇨🇿' },
-  { value: 'ua', label: '🇺🇦' },
-  { value: 'de', label: '🇩🇪' },
+  { value: 'cz', flag: '🇨🇿', name: 'Чехия' },
+  { value: 'ua', flag: '🇺🇦', name: 'Украина' },
+  { value: 'de', flag: '🇩🇪', name: 'Германия' },
 ]
 
 const RATINGS = [
@@ -445,8 +445,9 @@ export default function AddItemPage() {
           <label style={labelStyle}>Страна</label>
           <div style={{ display: 'flex', gap: 8 }}>
             {COUNTRIES.map(c => (
-              <button key={c.value} onClick={() => setCountry(c.value)} style={{ flex: 1, padding: '12px 4px', borderRadius: 12, fontSize: 24, lineHeight: 1, background: country === c.value ? 'var(--bg2)' : 'var(--bg3)', border: country === c.value ? '2px solid var(--accent)' : '2px solid var(--border)', transition: 'all .2s', cursor: 'pointer', filter: country === c.value ? 'none' : 'grayscale(40%)', opacity: country === c.value ? 1 : 0.7 }}>
-                {c.label}
+              <button key={c.value} onClick={() => setCountry(c.value)} style={{ flex: 1, padding: '10px 4px', borderRadius: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, lineHeight: 1, background: country === c.value ? 'var(--bg2)' : 'var(--bg3)', border: country === c.value ? '2px solid var(--accent)' : '2px solid var(--border)', transition: 'all .2s', cursor: 'pointer', filter: country === c.value ? 'none' : 'grayscale(40%)', opacity: country === c.value ? 1 : 0.7 }}>
+                <span style={{ fontSize: 22 }}>{c.flag}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)' }}>{c.name}</span>
               </button>
             ))}
           </div>
