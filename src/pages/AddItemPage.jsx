@@ -51,7 +51,10 @@ function ImageEditor({ src, onDone, onCancel }) {
     const img = imgRef.current
     const cont = containerRef.current
     const contRect = cont.getBoundingClientRect()
-    const scale = Math.min(contRect.width / img.naturalWidth, contRect.height / img.naturalHeight)
+    const PAD = 28
+    const availW = Math.max(1, contRect.width - PAD * 2)
+    const availH = Math.max(1, contRect.height - PAD * 2)
+    const scale = Math.min(availW / img.naturalWidth, availH / img.naturalHeight)
     const w = img.naturalWidth * scale
     const h = img.naturalHeight * scale
     const x = (contRect.width - w) / 2
