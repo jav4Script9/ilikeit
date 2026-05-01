@@ -64,10 +64,7 @@ export default function ItemCard({ item }) {
       await supabase.from('ratings').delete().eq('item_id', item.id).eq('user_id', user.id)
       setRatings(prev => prev.filter(r => r.user_id !== user.id))
     } else {
-      if (myVote) {
-        await supabase.from('ratings').delete().eq('item_id', item.id).eq('user_id', user.id)
-      }
-      const { data } = await supabase.from('ratings').insert({ item_id: item.id, user_id: user.id, type }).select().single()
+      const { data } = await supabase.from('ratings').upsert({ item_id: item.id, user_id: user.id, type }, { onConflict: 'user_id,item_id' }).select().single()
       setRatings(prev => {
         const without = prev.filter(r => r.user_id !== user.id)
         return data ? [...without, data] : [...without, { user_id: user.id, type, item_id: item.id }]

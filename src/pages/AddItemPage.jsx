@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
+import { processImage } from '../lib/photo'
 
 const COUNTRIES = [
   { value: 'cz', flag: '🇨🇿', name: 'Чехия' },
@@ -14,30 +15,6 @@ const RATINGS = [
   { value: 'maybe', emoji: '😐', label: 'Не определился' },
   { value: 'love', emoji: '😍', label: 'Нравится' },
 ]
-
-const compressToWebp = (file, maxDim = 1920, quality = 0.85) => new Promise((resolve, reject) => {
-  const reader = new FileReader()
-  reader.onerror = () => reject(new Error('Не удалось прочитать файл'))
-  reader.onload = (ev) => {
-    const img = new Image()
-    img.onerror = () => reject(new Error('Браузер не смог открыть это фото — возможно, формат не поддерживается'))
-    img.onload = () => {
-      const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight))
-      const w = Math.round(img.naturalWidth * scale)
-      const h = Math.round(img.naturalHeight * scale)
-      const canvas = document.createElement('canvas')
-      canvas.width = w
-      canvas.height = h
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h)
-      canvas.toBlob(blob => {
-        if (blob) return resolve(blob)
-        canvas.toBlob(b2 => b2 ? resolve(b2) : reject(new Error('Кодирование изображения не удалось')), 'image/jpeg', quality)
-      }, 'image/webp', quality)
-    }
-    img.src = ev.target.result
-  }
-  reader.readAsDataURL(file)
-})
 
 function ImageEditor({ src, onDone, onCancel }) {
   const containerRef = useRef()
@@ -330,6 +307,13 @@ export default function AddItemPage() {
     return () => clearTimeout(t)
   }, [error])
 
+  const photosRef = useRef(photos)
+  useEffect(() => { photosRef.current = photos }, [photos])
+  useEffect(() => () => {
+    photosRef.current.forEach(p => { if (p.preview) URL.revokeObjectURL(p.preview) })
+    if (miniMap.current) { miniMap.current.remove(); miniMap.current = null }
+  }, [])
+
   const searchPlaces = async (q) => {
     if (q.length < 2) { setPlaceSuggestions([]); setShowSuggestions(false); return }
     const { data } = await supabase.from('places').select('*').eq('category', category).ilike('name', `%${q}%`).limit(5)
@@ -353,14 +337,7 @@ export default function AddItemPage() {
       const placeholder = { preview: null, blob: null, converting: isHeic }
       setPhotos(prev => [...prev, placeholder])
       try {
-        let working = file
-        if (isHeic) {
-          const heic2any = (await import('heic2any')).default
-          const out = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 })
-          const jpegBlob = Array.isArray(out) ? out[0] : out
-          working = new File([jpegBlob], file.name.replace(/\.hei[cf]$/i, '.jpg'), { type: 'image/jpeg' })
-        }
-        const blob = await compressToWebp(working)
+        const blob = await processImage(file)
         const url = URL.createObjectURL(blob)
         setPhotos(prev => prev.map(p => p === placeholder ? { preview: url, blob } : p))
       } catch (err) {
@@ -372,8 +349,19 @@ export default function AddItemPage() {
 
   const handleEditDone = (blob) => {
     const url = URL.createObjectURL(blob)
-    setPhotos(prev => prev.map((p, i) => i === editTarget.index ? { ...p, preview: url, blob } : p))
+    setPhotos(prev => prev.map((p, i) => {
+      if (i !== editTarget.index) return p
+      if (p.preview) URL.revokeObjectURL(p.preview)
+      return { ...p, preview: url, blob }
+    }))
     setEditTarget(null)
+  }
+
+  const removePhoto = (idx) => {
+    setPhotos(prev => prev.filter((p, j) => {
+      if (j === idx && p.preview) URL.revokeObjectURL(p.preview)
+      return j !== idx
+    }))
   }
 
   const uploadPhotos = async () => {
@@ -465,7 +453,7 @@ export default function AddItemPage() {
                       <button onClick={() => setEditTarget({ index: i, src: p.preview })} style={{ width: 26, height: 26, borderRadius: 6, background: 'rgba(0,0,0,0.75)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                       </button>
-                      <button onClick={() => setPhotos(prev => prev.filter((_, j) => j !== i))} style={{ width: 26, height: 26, borderRadius: 6, background: 'rgba(0,0,0,0.75)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <button onClick={() => removePhoto(i)} style={{ width: 26, height: 26, borderRadius: 6, background: 'rgba(0,0,0,0.75)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
                       </button>
                     </div>

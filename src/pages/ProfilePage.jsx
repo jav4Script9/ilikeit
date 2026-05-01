@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
 import { useTheme } from '../lib/useTheme'
+import { processImage } from '../lib/photo'
 import ItemCard from '../components/ItemCard'
 
 export default function ProfilePage() {
@@ -63,19 +64,25 @@ export default function ProfilePage() {
 
   async function handleAvatar(e) {
     const file = e.target.files[0]
+    e.target.value = ''
     if (!file) return
     setUploadingAvatar(true)
-    const ext = file.name.split('.').pop()
-    const path = `avatars/${user.id}.${ext}`
-    const { error } = await supabase.storage.from('photos').upload(path, file, { upsert: true })
-    if (!error) {
-      const { data } = supabase.storage.from('photos').getPublicUrl(path)
-      setAvatarUrl(data.publicUrl)
-      await supabase.from('profiles').upsert({
-        id: user.id,
-        avatar_url: data.publicUrl,
-        updated_at: new Date().toISOString(),
-      })
+    try {
+      const blob = await processImage(file, { maxDim: 512, quality: 0.85 })
+      const path = `avatars/${user.id}.webp`
+      const { error } = await supabase.storage.from('photos').upload(path, blob, { upsert: true, contentType: 'image/webp' })
+      if (!error) {
+        const { data } = supabase.storage.from('photos').getPublicUrl(path)
+        const cacheBusted = `${data.publicUrl}?v=${Date.now()}`
+        setAvatarUrl(cacheBusted)
+        await supabase.from('profiles').upsert({
+          id: user.id,
+          avatar_url: cacheBusted,
+          updated_at: new Date().toISOString(),
+        })
+      }
+    } catch (err) {
+      console.error('Не удалось загрузить аватар:', err)
     }
     setUploadingAvatar(false)
   }

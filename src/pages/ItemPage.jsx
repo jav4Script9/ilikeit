@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/AuthContext'
+import { processImage } from '../lib/photo'
 
 const EMOJI_MAP = { love: '😍', ok: '😐', bad: '😞' }
 const LABEL_MAP = { love: 'Нравится', ok: 'Норм', bad: 'Не то' }
@@ -64,12 +65,13 @@ export default function ItemPage() {
       setRatings(prev => ({ ...prev, [type]: prev[type] - 1 }))
       setMyRating(null)
     } else {
-      if (myRating) {
-        await supabase.from('ratings').delete().eq('item_id', id).eq('user_id', user.id)
-        setRatings(prev => ({ ...prev, [myRating]: prev[myRating] - 1 }))
-      }
-      await supabase.from('ratings').insert({ item_id: id, user_id: user.id, type })
-      setRatings(prev => ({ ...prev, [type]: prev[type] + 1 }))
+      await supabase.from('ratings').upsert({ item_id: id, user_id: user.id, type }, { onConflict: 'user_id,item_id' })
+      setRatings(prev => {
+        const next = { ...prev }
+        if (myRating) next[myRating] -= 1
+        next[type] += 1
+        return next
+      })
       setMyRating(type)
     }
     setVoting(false)
@@ -78,14 +80,24 @@ export default function ItemPage() {
   const [editPhotos, setEditPhotos] = useState([])
   const [editPhotoIdx, setEditPhotoIdx] = useState(0)
   const editFileRef = useRef()
+  const editPhotosRef = useRef(editPhotos)
+  useEffect(() => { editPhotosRef.current = editPhotos }, [editPhotos])
+  useEffect(() => () => {
+    editPhotosRef.current.forEach(p => { if (p.preview) URL.revokeObjectURL(p.preview) })
+  }, [])
 
-  const handleEditPhoto = (e) => {
+  const handleEditPhoto = async (e) => {
     const files = Array.from(e.target.files)
-    files.forEach(file => {
-      const reader = new FileReader()
-      reader.onload = ev => setEditPhotos(prev => [...prev, { preview: ev.target.result, blob: file }])
-      reader.readAsDataURL(file)
-    })
+    e.target.value = ''
+    for (const file of files) {
+      try {
+        const blob = await processImage(file)
+        const url = URL.createObjectURL(blob)
+        setEditPhotos(prev => [...prev, { preview: url, blob }])
+      } catch (err) {
+        console.error('Не удалось обработать фото:', err)
+      }
+    }
   }
 
   async function saveEdit() {
@@ -97,7 +109,7 @@ export default function ItemPage() {
       for (let i = 0; i < editPhotos.length; i++) {
         const p = editPhotos[i]
         const path = `${user.id}/${Date.now()}_${i}.webp`
-        await supabase.storage.from('photos').upload(path, p.blob)
+        await supabase.storage.from('photos').upload(path, p.blob, { contentType: 'image/webp' })
         const { data } = supabase.storage.from('photos').getPublicUrl(path)
         newUrls.push(data.publicUrl)
       }
